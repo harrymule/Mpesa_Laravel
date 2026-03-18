@@ -95,6 +95,10 @@ class MpesaServiceProvider extends ServiceProvider
     protected function registerExceptionRendering(): void
     {
         $this->app->afterResolving('Illuminate\\Contracts\\Debug\\ExceptionHandler', function ($handler) {
+            if (! method_exists($handler, 'renderable')) {
+                return;
+            }
+
             $handler->renderable(function (ValidationException $exception, Request $request) {
                 if ($this->isMpesaRequest($request)) {
                     return ApiErrorResponse::validation($exception);
