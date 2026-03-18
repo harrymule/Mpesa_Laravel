@@ -1,0 +1,8 @@
+/vendor/
+/.phpunit.cache/
+/.idea/
+/.vscode/
+composer.phar
+
+/resources/MAUZO/
+/.claude

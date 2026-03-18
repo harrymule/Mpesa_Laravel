@@ -1,0 +1,61 @@
+{
+    "name": "harri/laravel-mpesa",
+    "description": "Plug and play Laravel package for Safaricom M-Pesa Daraja integrations.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "mpesa",
+        "daraja",
+        "safaricom",
+        "payments"
+    ],
+    "authors": [
+        {
+            "name": "Harri",
+            "role": "Maintainer"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/bus": "^10.0|^11.0|^12.0",
+        "illuminate/database": "^10.0|^11.0|^12.0",
+        "illuminate/http": "^10.0|^11.0|^12.0",
+        "illuminate/queue": "^10.0|^11.0|^12.0",
+        "illuminate/routing": "^10.0|^11.0|^12.0",
+        "illuminate/support": "^10.0|^11.0|^12.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "phpunit/phpunit": "^10.5|^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Harri\\LaravelMpesa\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Harri\\LaravelMpesa\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:coverage": "phpunit --coverage-text"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Harri\\LaravelMpesa\\MpesaServiceProvider"
+            ],
+            "aliases": {
+                "Mpesa": "Harri\\LaravelMpesa\\Facades\\Mpesa"
+            }
+        },
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
