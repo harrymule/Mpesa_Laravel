@@ -3,12 +3,12 @@
 namespace Harri\LaravelMpesa\Tests\Feature;
 
 use Harri\LaravelMpesa\Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Harri\LaravelMpesa\Tests\Concerns\RefreshPackageDatabase;
 use Illuminate\Support\Facades\Http;
 
 class QrCodeEndpointTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshPackageDatabase;
 
     public function test_it_returns_qr_specific_known_errors(): void
     {

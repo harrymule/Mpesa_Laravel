@@ -81,11 +81,23 @@ return [
     ],
     'c2b' => [
         'validation_responder' => AcceptC2bValidation::class,
+        'fallback' => [
+            'enabled' => env('MPESA_C2B_FALLBACK_ENABLED', false),
+            'shortcode' => env('MPESA_C2B_FALLBACK_SHORTCODE', env('MPESA_SHORTCODE')),
+            'instructions' => env('MPESA_C2B_FALLBACK_INSTRUCTIONS', 'Complete payment via M-Pesa PayBill and use the provided account reference.'),
+        ],
     ],
     'stk' => [
         'callback_url' => env('MPESA_STK_CALLBACK_URL'),
         'default_description' => env('MPESA_STK_DESCRIPTION', 'STK Push Payment'),
         'default_reference' => env('MPESA_STK_REFERENCE', 'Payment'),
+    ],
+    'qr' => [
+        'generate_uri' => env('MPESA_QR_GENERATE_URI', '/mpesa/qrcode/v1/generate'),
+        'default_size' => (string) env('MPESA_QR_DEFAULT_SIZE', '300'),
+    ],
+    'b2c' => [
+        'payment_uri' => env('MPESA_B2C_PAYMENT_URI', '/mpesa/b2c/v3/paymentrequest'),
     ],
     'connections' => [
         'sandbox' => [
@@ -102,7 +114,3 @@ return [
         ],
     ],
 ];
-
-
-
-

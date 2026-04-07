@@ -16,6 +16,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -45,7 +46,7 @@ class MpesaServiceProvider extends ServiceProvider
             $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         }
 
-        MpesaErrorCatalog::syncKnownDefinitions();
+        $this->syncKnownErrorDefinitions();
 
         $this->registerRateLimiter();
 
@@ -147,6 +148,17 @@ class MpesaServiceProvider extends ServiceProvider
         $prefix = trim((string) config('mpesa.route_prefix', 'daraja'), '/');
 
         return $request->is($prefix) || $request->is($prefix . '/*');
+    }
+
+    protected function syncKnownErrorDefinitions(): void
+    {
+        try {
+            if (Schema::hasTable('mpesa_error_codes')) {
+                MpesaErrorCatalog::syncKnownDefinitions();
+            }
+        } catch (Throwable) {
+            // The package should still boot before its migrations are executed.
+        }
     }
 }
 

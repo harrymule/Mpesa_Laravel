@@ -3,13 +3,13 @@
 namespace Harri\LaravelMpesa\Tests\Feature;
 
 use Harri\LaravelMpesa\Models\MpesaErrorCode;
+use Harri\LaravelMpesa\Tests\Concerns\RefreshPackageDatabase;
 use Harri\LaravelMpesa\Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 
 class PackageHardeningTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshPackageDatabase;
 
     public function test_initiation_routes_can_be_protected_with_middleware(): void
     {

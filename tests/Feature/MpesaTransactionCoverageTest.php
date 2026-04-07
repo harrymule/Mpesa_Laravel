@@ -8,14 +8,14 @@ use Harri\LaravelMpesa\Models\MpesaErrorCode;
 use Harri\LaravelMpesa\Models\MpesaTransaction;
 use Harri\LaravelMpesa\Models\Payment;
 use Harri\LaravelMpesa\Services\TransactionService;
+use Harri\LaravelMpesa\Tests\Concerns\RefreshPackageDatabase;
 use Harri\LaravelMpesa\Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 
 class MpesaTransactionCoverageTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshPackageDatabase;
 
     public function test_it_registers_c2b_urls_and_logs_the_request(): void
     {

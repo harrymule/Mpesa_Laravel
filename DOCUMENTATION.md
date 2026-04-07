@@ -196,6 +196,8 @@ Implemented raw operations:
 - `reversal`
 - `accountBalance`
 - `transactionStatus`
+- `qrCode`
+- `batch`
 
 This class is the reusable Daraja API layer.
 
@@ -223,11 +225,15 @@ Defined in:
 
 Registered under the configured prefix, default:
 
-- `/mpesa`
+- `/daraja`
 
 Routes:
 
 - `POST /daraja/stk-push`
+- `POST /daraja/stk-push/query`
+- `GET /daraja/stk-push/status/{trackingId}`
+- `GET /daraja/stk-push/paybill/{trackingId}`
+- `POST /daraja/stk-push/verify-manual`
 - `POST /daraja/c2b/register`
 - `POST /daraja/c2b/simulate`
 - `POST /daraja/b2c`
@@ -235,6 +241,7 @@ Routes:
 - `POST /daraja/reversal`
 - `POST /daraja/account-balance`
 - `POST /daraja/transaction-status`
+- `POST /daraja/qr-code`
 
 ### Callback Routes
 
@@ -277,6 +284,10 @@ File:
 Responsibilities:
 
 - validates STK initiation payload
+- validates STK query payload
+- exposes package-tracked STK status lookups
+- exposes PayBill fallback instructions for pending STK flows
+- exposes manual receipt verification
 - delegates initiation to `StkPushService`
 - returns normalized success response
 
@@ -294,6 +305,7 @@ Responsibilities:
 
 Supported initiation endpoints:
 
+- Dynamic QR
 - C2B register
 - C2B simulate
 - B2C
@@ -329,6 +341,10 @@ File:
 Responsibilities:
 
 - initiates STK push through the raw client
+- performs STK query lookups
+- returns normalized package-tracked STK status
+- returns C2B fallback instructions when enabled
+- verifies manually supplied receipt numbers against stored payments
 - normalizes phone number format
 - stores STK request metadata
 - returns package-friendly initiation response data
@@ -368,7 +384,7 @@ This is one of the most important files in the package because it turns raw call
 
 ## Persistence Layer
 
-The package persists request and callback state using three tables and models.
+The package persists request and callback state using four tables and models.
 
 ### 1. STK Push Records
 
@@ -429,6 +445,24 @@ Purpose:
 
 This generic table is what made it possible to fully package non-STK flows.
 
+### 4. Error Catalog
+
+Model:
+
+- `src/Models/MpesaErrorCode.php`
+
+Migration:
+
+- `database/migrations/2026_03_18_000004_create_mpesa_error_codes_table.php`
+
+Purpose:
+
+- persist known Daraja error definitions
+- record newly observed unknown errors automatically
+- distinguish errors by journey and stage
+- track occurrence counts and sample payloads
+- support friendlier normalized API error responses
+
 ## Supported Flow Behavior
 
 ### STK Push
@@ -452,8 +486,35 @@ This is the most complete and richest flow in the package.
 What is implemented:
 
 - raw client support through `MpesaClient`
+- initiation endpoint for package consumers
+- package-level status persistence updates
+- result-stage error cataloging for query failures
 
-This is useful for direct app usage when needed.
+This is useful both for direct app usage and for reconciling asynchronous STK flows.
+
+### STK Status Lookup
+
+What is implemented:
+
+- package endpoint to query an STK record by `tracking_id`
+- normalized success and not-found responses
+- receipt/result metadata when a payment has already been linked
+
+### C2B PayBill Fallback Instructions
+
+What is implemented:
+
+- package endpoint to expose fallback instructions for a tracked STK request
+- configurable fallback enablement, shortcode, and instructions
+- neutral package response that consuming apps can turn into UI or automation
+
+### Manual Receipt Verification
+
+What is implemented:
+
+- package endpoint to verify a manually supplied M-Pesa receipt number
+- optional matching by tracking ID, phone, amount, and reference
+- automatic linking of the verified payment back to a tracked STK record when matched
 
 ### C2B Register
 
@@ -908,8 +969,8 @@ Files:
 
 The suite currently passes with:
 
-- 15 tests
-- 68 assertions
+- 49 tests
+- 211 assertions
 
 ## CI Workflow
 
@@ -921,7 +982,8 @@ Implemented behavior:
 
 - runs on push
 - runs on pull request
-- tests on PHP 8.2 and 8.3
+- tests on PHP 8.0, 8.1, 8.2, and 8.3
+- exercises both lowest and stable dependency resolution paths
 - provisions MySQL service
 - validates composer
 - installs dependencies
@@ -951,11 +1013,13 @@ This means the package now includes a usable CI pipeline for automated verificat
 
 ### Composer Validation Status
 
-Validated successfully with:
+Current status:
 
 ```bash
-composer validate --strict
+composer validate
 ```
+
+At the moment the only validation warning is that `composer.lock` is not yet synced with the latest `composer.json` changes on this machine.
 
 ## Remaining External Tasks
 

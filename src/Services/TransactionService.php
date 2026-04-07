@@ -143,7 +143,7 @@ class TransactionService
         return match ($type) {
             'c2b_register' => ['uri' => '/mpesa/c2b/v2/registerurl', 'secure' => false, 'status' => 'completed'],
             'c2b_simulate' => ['uri' => '/mpesa/c2b/v2/simulate', 'secure' => false, 'status' => 'completed'],
-            'b2c' => ['uri' => '/mpesa/b2c/v1/paymentrequest', 'secure' => true, 'status' => 'requested'],
+            'b2c' => ['uri' => (string) config('mpesa.b2c.payment_uri', '/mpesa/b2c/v3/paymentrequest'), 'secure' => true, 'status' => 'requested'],
             'b2b' => ['uri' => '/mpesa/b2b/v1/paymentrequest', 'secure' => true, 'status' => 'requested'],
             'reversal' => ['uri' => '/mpesa/reversal/v2/request', 'secure' => true, 'status' => 'requested'],
             'account_balance' => ['uri' => '/mpesa/accountbalance/v1/query', 'secure' => true, 'status' => 'requested'],

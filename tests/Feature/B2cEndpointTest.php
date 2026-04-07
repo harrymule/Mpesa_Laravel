@@ -3,12 +3,12 @@
 namespace Harri\LaravelMpesa\Tests\Feature;
 
 use Harri\LaravelMpesa\Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Harri\LaravelMpesa\Tests\Concerns\RefreshPackageDatabase;
 use Illuminate\Support\Facades\Http;
 
 class B2cEndpointTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshPackageDatabase;
 
     public function test_it_submits_b2c_and_logs_transaction(): void
     {

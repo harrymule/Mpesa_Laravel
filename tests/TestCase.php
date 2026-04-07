@@ -8,9 +8,49 @@ use Orchestra\Testbench\TestCase as Orchestra;
 
 abstract class TestCase extends Orchestra
 {
+
     protected function getPackageProviders($app): array
     {
         return [MpesaServiceProvider::class];
+    }
+
+    protected function resetTestingDatabase(): void
+    {
+        $connection = config('database.connections.testing');
+
+        if (($connection['driver'] ?? null) !== 'mysql' || ! extension_loaded('pdo_mysql')) {
+            return;
+        }
+
+        $database = $connection['database'];
+
+        $pdo = new \PDO(
+            sprintf(
+                'mysql:host=%s;port=%s;dbname=%s',
+                $connection['host'],
+                $connection['port'],
+                $database
+            ),
+            $connection['username'],
+            $connection['password']
+        );
+
+        $tables = $pdo->query(
+            "select table_name from information_schema.tables where table_schema = '{$database}'"
+        )->fetchAll(\PDO::FETCH_COLUMN);
+
+        if (empty($tables)) {
+            return;
+        }
+
+        $qualifiedTables = array_map(
+            static fn (string $table): string => sprintf('`%s`.`%s`', $database, $table),
+            $tables
+        );
+
+        $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
+        $pdo->exec('DROP TABLE IF EXISTS '.implode(', ', $qualifiedTables));
+        $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
     }
 
     protected function defineEnvironment($app): void
@@ -48,5 +88,3 @@ abstract class TestCase extends Orchestra
         $app['router']->aliasMiddleware('mpesa.test.deny', DenyMiddleware::class);
     }
 }
-
-

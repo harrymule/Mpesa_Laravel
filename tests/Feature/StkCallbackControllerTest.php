@@ -5,14 +5,14 @@ namespace Harri\LaravelMpesa\Tests\Feature;
 use Harri\LaravelMpesa\Jobs\ForwardMpesaCallbackJob;
 use Harri\LaravelMpesa\Models\Payment;
 use Harri\LaravelMpesa\Models\StkPush;
+use Harri\LaravelMpesa\Tests\Concerns\RefreshPackageDatabase;
 use Harri\LaravelMpesa\Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 
 class StkCallbackControllerTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshPackageDatabase;
 
     public function test_it_processes_stk_callback_and_creates_payment(): void
     {

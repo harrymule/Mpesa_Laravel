@@ -60,5 +60,68 @@ class StkPushController extends Controller
             'response' => $result['response'],
         ]);
     }
-}
 
+    public function status(string $trackingId, StkPushService $service): JsonResponse
+    {
+        $result = $service->status($trackingId);
+
+        return response()->json([
+            'success' => $result['matched'] ?? false,
+            'message' => ($result['matched'] ?? false)
+                ? 'STK push status retrieved successfully.'
+                : 'STK push tracking record was not found.',
+            ...$result,
+        ], ($result['matched'] ?? false) ? 200 : 404);
+    }
+
+    public function paybillInstructions(string $trackingId, StkPushService $service): JsonResponse
+    {
+        $result = $service->paybillInstructions($trackingId);
+
+        if (! ($result['matched'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'STK push tracking record was not found.',
+                ...$result,
+            ], 404);
+        }
+
+        if (! ($result['fallback_enabled'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'C2B fallback is not enabled for this package instance.',
+                ...$result,
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'PayBill fallback instructions retrieved successfully.',
+            ...$result,
+        ]);
+    }
+
+    public function verifyManualPayment(Request $request, StkPushService $service): JsonResponse
+    {
+        $data = $request->validate([
+            'receipt_number' => ['required', 'string'],
+            'tracking_id' => ['nullable', 'string'],
+            'phone' => ['nullable', 'string'],
+            'amount' => ['nullable', 'numeric', 'min:0'],
+            'reference' => ['nullable', 'string'],
+        ]);
+
+        $result = $service->verifyManualPayment(
+            receiptNumber: $data['receipt_number'],
+            trackingId: $data['tracking_id'] ?? null,
+            phone: $data['phone'] ?? null,
+            amount: $data['amount'] ?? null,
+            reference: $data['reference'] ?? null,
+        );
+
+        return response()->json([
+            'success' => $result['verified'] ?? false,
+            ...$result,
+        ], ($result['verified'] ?? false) ? 200 : 422);
+    }
+}
