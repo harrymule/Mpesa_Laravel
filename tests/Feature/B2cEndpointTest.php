@@ -17,7 +17,7 @@ class B2cEndpointTest extends TestCase
                 'access_token' => 'test-token',
                 'expires_in' => '3600',
             ]),
-            'https://sandbox.safaricom.co.ke/mpesa/b2c/v1/paymentrequest' => Http::response([
+            'https://sandbox.safaricom.co.ke/mpesa/b2c/v3/paymentrequest' => Http::response([
                 'ConversationID' => 'AG_20260316_00001',
                 'OriginatorConversationID' => '12345-67890-1',
                 'ResponseCode' => '0',
@@ -25,10 +25,12 @@ class B2cEndpointTest extends TestCase
             ]),
         ]);
 
-        $response = $this->postJson('/mpesa/b2c', [
+        $response = $this->postJson('/daraja/b2c', [
+            'OriginatorConversationID' => '600997_Test_32et3241ed8yu',
             'Amount' => 150,
             'PartyB' => '0712345678',
             'Remarks' => 'Withdrawal',
+            'Occassion' => 'ChristmasPay',
             'callback_url' => 'https://client-app.test/api/b2c-callback',
         ]);
 
@@ -44,3 +46,6 @@ class B2cEndpointTest extends TestCase
         ]);
     }
 }
+
+
+

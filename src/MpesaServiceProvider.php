@@ -7,6 +7,7 @@ use Harri\LaravelMpesa\Http\Middleware\EnsureAuthorizedInitiationRequest;
 use Harri\LaravelMpesa\Http\Middleware\EnsureTrustedCallbackRequest;
 use Harri\LaravelMpesa\Http\Responses\ApiErrorResponse;
 use Harri\LaravelMpesa\Services\MpesaCallbackProcessor;
+use Harri\LaravelMpesa\Support\MpesaErrorCatalog;
 use Harri\LaravelMpesa\Services\StkPushService;
 use Harri\LaravelMpesa\Services\TransactionService;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -44,6 +45,8 @@ class MpesaServiceProvider extends ServiceProvider
             $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         }
 
+        MpesaErrorCatalog::syncKnownDefinitions();
+
         $this->registerRateLimiter();
 
         $router = $this->app['router'];
@@ -51,7 +54,7 @@ class MpesaServiceProvider extends ServiceProvider
         $router->aliasMiddleware('mpesa.callback.auth', EnsureTrustedCallbackRequest::class);
 
         if (config('mpesa.load_routes', true)) {
-            $prefix = (string) config('mpesa.route_prefix', 'mpesa');
+            $prefix = (string) config('mpesa.route_prefix', 'daraja');
 
             if (config('mpesa.load_initiation_routes', true)) {
                 Route::prefix($prefix)
@@ -141,8 +144,10 @@ class MpesaServiceProvider extends ServiceProvider
 
     protected function isMpesaRequest(Request $request): bool
     {
-        $prefix = trim((string) config('mpesa.route_prefix', 'mpesa'), '/');
+        $prefix = trim((string) config('mpesa.route_prefix', 'daraja'), '/');
 
         return $request->is($prefix) || $request->is($prefix . '/*');
     }
 }
+
+

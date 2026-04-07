@@ -18,6 +18,7 @@ The result is a Laravel package that provides:
 - persistence for requests, responses, and payment confirmations
 - callback forwarding to client applications
 - package-level security controls
+- journey-specific logging separation for high-volume traffic
 - extension points for customization
 - automated tests
 - CI configuration for ongoing verification
@@ -142,6 +143,7 @@ Responsibilities:
 - defines route loading flags for initiation and callback groups
 - defines callback dispatch behavior
 - defines OAuth token cache settings
+- defines journey-specific logging channels
 - defines initiation rate-limiting settings
 - defines security options
 - defines overridable models
@@ -225,14 +227,14 @@ Registered under the configured prefix, default:
 
 Routes:
 
-- `POST /mpesa/stk-push`
-- `POST /mpesa/c2b/register`
-- `POST /mpesa/c2b/simulate`
-- `POST /mpesa/b2c`
-- `POST /mpesa/b2b`
-- `POST /mpesa/reversal`
-- `POST /mpesa/account-balance`
-- `POST /mpesa/transaction-status`
+- `POST /daraja/stk-push`
+- `POST /daraja/c2b/register`
+- `POST /daraja/c2b/simulate`
+- `POST /daraja/b2c`
+- `POST /daraja/b2b`
+- `POST /daraja/reversal`
+- `POST /daraja/account-balance`
+- `POST /daraja/transaction-status`
 
 ### Callback Routes
 
@@ -242,16 +244,16 @@ Defined in:
 
 Routes:
 
-- `POST /mpesa/callbacks/stk`
-- `POST /mpesa/callbacks/timeout`
-- `POST /mpesa/callbacks/c2b/confirmation`
-- `POST /mpesa/callbacks/c2b/validation`
-- `POST /mpesa/callbacks/b2c/result`
-- `POST /mpesa/callbacks/b2c/timeout`
-- `POST /mpesa/callbacks/b2b/result`
-- `POST /mpesa/callbacks/reversal/result`
-- `POST /mpesa/callbacks/account-balance/result`
-- `POST /mpesa/callbacks/transaction-status/result`
+- `POST /daraja/callbacks/stk`
+- `POST /daraja/callbacks/timeout`
+- `POST /daraja/callbacks/c2b/confirmation`
+- `POST /daraja/callbacks/c2b/validation`
+- `POST /daraja/callbacks/b2c/result`
+- `POST /daraja/callbacks/b2c/timeout`
+- `POST /daraja/callbacks/b2b/result`
+- `POST /daraja/callbacks/reversal/result`
+- `POST /daraja/callbacks/account-balance/result`
+- `POST /daraja/callbacks/transaction-status/result`
 
 ### Important Improvement
 
@@ -310,6 +312,7 @@ Responsibilities:
 
 - receives Daraja callback payloads
 - logs callback payloads
+- routes logs to journey-specific channels when configured
 - dispatches callback events
 - delegates processing to `MpesaCallbackProcessor`
 - invokes the pluggable C2B validation responder
@@ -502,7 +505,7 @@ Config key:
 
 How it works:
 
-1. Daraja sends a validation callback to `POST /mpesa/callbacks/c2b/validation`
+1. Daraja sends a validation callback to `POST /daraja/callbacks/c2b/validation`
 2. the package logs the payload and dispatches `C2bValidationReceived`
 3. the configured responder class receives the raw payload
 4. the responder returns a Daraja-style payload with `ResultCode` and `ResultDesc`
@@ -1032,3 +1035,6 @@ What started as a repeated copy-paste Laravel M-Pesa scaffold has now been turne
 - onboarding docs and environment template
 
 In short, the package is now functionally complete for local use and close to publish-ready, with only the public repository and Packagist registration left as external follow-up steps.
+
+
+

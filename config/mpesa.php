@@ -9,7 +9,23 @@ use Harri\LaravelMpesa\Support\DefaultCallbackPayloadTransformer;
 return [
     'default' => env('MPESA_DEFAULT', 'sandbox'),
     'log_channel' => env('MPESA_LOG_CHANNEL', 'stack'),
-    'route_prefix' => env('MPESA_ROUTE_PREFIX', 'mpesa'),
+    'log_channels' => [
+        'default' => env('MPESA_LOG_CHANNEL', 'stack'),
+        'oauth' => env('MPESA_LOG_CHANNEL_OAUTH', env('MPESA_LOG_CHANNEL', 'stack')),
+        'stk' => env('MPESA_LOG_CHANNEL_STK', env('MPESA_LOG_CHANNEL', 'stack')),
+        'stk_query' => env('MPESA_LOG_CHANNEL_STK_QUERY', env('MPESA_LOG_CHANNEL_STK', env('MPESA_LOG_CHANNEL', 'stack'))),
+        'c2b' => env('MPESA_LOG_CHANNEL_C2B', env('MPESA_LOG_CHANNEL', 'stack')),
+        'b2c' => env('MPESA_LOG_CHANNEL_B2C', env('MPESA_LOG_CHANNEL', 'stack')),
+        'b2b' => env('MPESA_LOG_CHANNEL_B2B', env('MPESA_LOG_CHANNEL', 'stack')),
+        'reversal' => env('MPESA_LOG_CHANNEL_REVERSAL', env('MPESA_LOG_CHANNEL', 'stack')),
+        'account_balance' => env('MPESA_LOG_CHANNEL_ACCOUNT_BALANCE', env('MPESA_LOG_CHANNEL', 'stack')),
+        'transaction_status' => env('MPESA_LOG_CHANNEL_TRANSACTION_STATUS', env('MPESA_LOG_CHANNEL', 'stack')),
+        'qr' => env('MPESA_LOG_CHANNEL_QR', env('MPESA_LOG_CHANNEL', 'stack')),
+        'forwarding' => env('MPESA_LOG_CHANNEL_FORWARDING', env('MPESA_LOG_CHANNEL', 'stack')),
+        'callback' => env('MPESA_LOG_CHANNEL_CALLBACK', env('MPESA_LOG_CHANNEL', 'stack')),
+        'security' => env('MPESA_LOG_CHANNEL_SECURITY', env('MPESA_LOG_CHANNEL', 'stack')),
+    ],
+    'route_prefix' => env('MPESA_ROUTE_PREFIX', 'daraja'),
     'route_middleware' => ['api'],
     'initiation_route_middleware' => array_values(array_filter(array_map('trim', explode(',', env('MPESA_INITIATION_ROUTE_MIDDLEWARE', 'api,throttle:mpesa.initiation,mpesa.initiation.auth'))))),
     'callback_route_middleware' => array_values(array_filter(array_map('trim', explode(',', env('MPESA_CALLBACK_ROUTE_MIDDLEWARE', 'api,mpesa.callback.auth'))))),
@@ -86,3 +102,7 @@ return [
         ],
     ],
 ];
+
+
+
+

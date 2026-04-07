@@ -14,6 +14,7 @@ use Harri\LaravelMpesa\Events\StkCallbackReceived;
 use Harri\LaravelMpesa\Events\TimeoutCallbackReceived;
 use Harri\LaravelMpesa\Events\TransactionStatusResultReceived;
 use Harri\LaravelMpesa\Services\MpesaCallbackProcessor;
+use Harri\LaravelMpesa\Support\MpesaLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -24,7 +25,7 @@ class MpesaCallbackController extends Controller
     public function stk(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('stk', $payload);
+        $this->log('stk', 'stk', $payload);
         event(new StkCallbackReceived($payload));
         $processor->processStk($payload);
 
@@ -34,7 +35,7 @@ class MpesaCallbackController extends Controller
     public function genericTimeout(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('timeout', $payload);
+        $this->log('timeout', 'callback', $payload);
         event(new TimeoutCallbackReceived($payload));
         $processor->processTimeoutAny($payload);
 
@@ -44,7 +45,7 @@ class MpesaCallbackController extends Controller
     public function confirmation(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('confirmation', $payload);
+        $this->log('confirmation', 'c2b', $payload);
         event(new C2bConfirmationReceived($payload));
         $processor->processC2bConfirmation($payload);
 
@@ -54,7 +55,7 @@ class MpesaCallbackController extends Controller
     public function validation(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('validation', $payload);
+        $this->log('validation', 'c2b', $payload);
         event(new C2bValidationReceived($payload));
 
         $response = $this->validationResponder()->respond($payload);
@@ -72,7 +73,7 @@ class MpesaCallbackController extends Controller
     public function result(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('b2c.result', $payload);
+        $this->log('b2c.result', 'b2c', $payload);
         event(new B2cResultReceived($payload));
         $processor->processResult('b2c', $payload);
 
@@ -82,7 +83,7 @@ class MpesaCallbackController extends Controller
     public function timeout(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('b2c.timeout', $payload);
+        $this->log('b2c.timeout', 'b2c', $payload);
         event(new B2cTimeoutReceived($payload));
         $processor->processTimeout('b2c', $payload);
 
@@ -92,7 +93,7 @@ class MpesaCallbackController extends Controller
     public function b2bResult(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('b2b.result', $payload);
+        $this->log('b2b.result', 'b2b', $payload);
         event(new B2bResultReceived($payload));
         $processor->processResult('b2b', $payload);
 
@@ -102,7 +103,7 @@ class MpesaCallbackController extends Controller
     public function reversalResult(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('reversal.result', $payload);
+        $this->log('reversal.result', 'reversal', $payload);
         event(new ReversalResultReceived($payload));
         $processor->processResult('reversal', $payload);
 
@@ -112,7 +113,7 @@ class MpesaCallbackController extends Controller
     public function accountBalanceResult(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('account-balance.result', $payload);
+        $this->log('account-balance.result', 'account_balance', $payload);
         event(new AccountBalanceResultReceived($payload));
         $processor->processResult('account_balance', $payload);
 
@@ -122,7 +123,7 @@ class MpesaCallbackController extends Controller
     public function transactionStatusResult(Request $request, MpesaCallbackProcessor $processor): JsonResponse
     {
         $payload = $request->all();
-        $this->log('transaction-status.result', $payload);
+        $this->log('transaction-status.result', 'transaction_status', $payload);
         event(new TransactionStatusResultReceived($payload));
         $processor->processResult('transaction_status', $payload);
 
@@ -144,9 +145,9 @@ class MpesaCallbackController extends Controller
         return app($class);
     }
 
-    protected function log(string $type, array $payload): void
+    protected function log(string $type, string $journey, array $payload): void
     {
-        Log::channel(config('mpesa.log_channel'))
+        Log::channel(MpesaLog::channel($journey))
             ->info("mpesa.{$type}.callback", $payload);
     }
 }

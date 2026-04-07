@@ -60,6 +60,13 @@ class TransactionService
         return $this->store('transaction_status', $payload, $response, 'requested', $meta, $callbackUrl);
     }
 
+    public function qrCode(array $payload, array $meta = []): array
+    {
+        $response = $this->client->qrCode($payload);
+
+        return $this->store('qr', $payload, $response, 'completed', $meta);
+    }
+
     public function batch(array $operations, array $meta = [], ?string $connection = null): array
     {
         $prepared = [];
@@ -111,13 +118,16 @@ class TransactionService
             'status' => $status,
             'phone_number' => $payload['PhoneNumber'] ?? $payload['PartyB'] ?? $payload['Msisdn'] ?? null,
             'amount' => $payload['Amount'] ?? null,
-            'reference' => $payload['AccountReference'] ?? $payload['BillRefNumber'] ?? $payload['TransactionID'] ?? null,
+            'reference' => $payload['AccountReference'] ?? $payload['BillRefNumber'] ?? $payload['RefNo'] ?? $payload['TransactionID'] ?? null,
             'callback_url' => $callbackUrl,
             'merchant_request_id' => $response['MerchantRequestID'] ?? null,
             'checkout_request_id' => $response['CheckoutRequestID'] ?? null,
             'conversation_id' => $response['ConversationID'] ?? null,
             'originator_conversation_id' => $response['OriginatorConversationID'] ?? null,
+            'transaction_id' => $response['RequestID'] ?? $response['requestId'] ?? null,
             'request_payload' => $payload,
+            'result_code' => isset($response['ResponseCode']) ? (string) $response['ResponseCode'] : null,
+            'result_desc' => $response['ResponseDescription'] ?? null,
             'response_payload' => $response,
             'meta' => $meta,
         ]);
@@ -138,6 +148,7 @@ class TransactionService
             'reversal' => ['uri' => '/mpesa/reversal/v2/request', 'secure' => true, 'status' => 'requested'],
             'account_balance' => ['uri' => '/mpesa/accountbalance/v1/query', 'secure' => true, 'status' => 'requested'],
             'transaction_status' => ['uri' => '/mpesa/transactionstatus/v1/query', 'secure' => true, 'status' => 'requested'],
+            'qr' => ['uri' => (string) config('mpesa.qr.generate_uri', '/mpesa/qrcode/v1/generate'), 'secure' => false, 'status' => 'completed'],
             default => throw new \InvalidArgumentException("Unsupported M-Pesa batch operation [{$type}]."),
         };
     }
@@ -147,3 +158,5 @@ class TransactionService
         return config('mpesa.models.transaction', MpesaTransaction::class);
     }
 }
+
+

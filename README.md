@@ -9,10 +9,11 @@ A plug-and-play Laravel package for Safaricom M-Pesa Daraja API integrations. Pr
 
 ## Features
 
-- Raw Daraja client for STK Push/Query, C2B Register/Simulate, B2C, B2B, Reversal, Account Balance, and Transaction Status
-- REST endpoints for all Daraja initiation flows (8 endpoints) and callback receivers (10 endpoints)
+- Raw Daraja client for STK Push/Query, C2B Register/Simulate, B2C, B2B, Reversal, Account Balance, Transaction Status, and Dynamic QR generation
+- REST endpoints for all Daraja initiation flows (9 endpoints) and callback receivers (10 endpoints)
 - Database persistence for STK requests, payment confirmations, and generic transaction logs
 - OAuth token caching with configurable TTL
+- Journey-specific log channel routing so STK, C2B, B2C, B2B, reversal, balance, status, and QR flows can be isolated
 - Batch/concurrent HTTP requests via Laravel's `Http::pool()`
 - Callback processors with idempotency checks to prevent duplicate processing
 - Queued callback forwarding to client application URLs with configurable queue connection
@@ -57,7 +58,7 @@ $response = Mpesa::stkPush([
     'PartyA'            => '254712345678',
     'PartyB'            => config('mpesa.shortcode'),
     'PhoneNumber'       => '254712345678',
-    'CallBackURL'       => 'https://your-app.test/mpesa/callbacks/stk',
+    'CallBackURL'       => 'https://your-app.test/daraja/callbacks/stk',
     'AccountReference'  => 'INV-1001',
     'TransactionDesc'   => 'Invoice payment',
 ]);
@@ -70,6 +71,9 @@ $response = Mpesa::b2c([...]);
 
 // Account balance
 $response = Mpesa::accountBalance([...]);
+
+// Dynamic QR
+$response = Mpesa::qrCode([...]);
 
 // Batch concurrent requests
 $results = Mpesa::batch([
@@ -85,7 +89,7 @@ Send JSON requests to the package endpoints. All initiation routes require a Bea
 **STK Push:**
 
 ```bash
-curl -X POST https://your-app.test/mpesa/stk-push \
+curl -X POST https://your-app.test/daraja/stk-push \
   -H "Authorization: Bearer your-token" \
   -H "Content-Type: application/json" \
   -d '{"amount": 100, "phone": "254712345678", "reference": "INV-1001"}'
@@ -93,35 +97,36 @@ curl -X POST https://your-app.test/mpesa/stk-push \
 
 ## Routes
 
-When `MPESA_LOAD_ROUTES=true` (default), the package registers endpoints under your configured prefix (default: `/mpesa`).
+When `MPESA_LOAD_ROUTES=true` (default), the package registers endpoints under your configured prefix (default: `/daraja`).
 
 ### Initiation Routes
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/mpesa/stk-push` | Initiate STK Push |
-| POST | `/mpesa/c2b/register` | Register C2B URLs |
-| POST | `/mpesa/c2b/simulate` | Simulate C2B payment |
-| POST | `/mpesa/b2c` | Business to Customer payment |
-| POST | `/mpesa/b2b` | Business to Business payment |
-| POST | `/mpesa/reversal` | Reverse a transaction |
-| POST | `/mpesa/account-balance` | Query account balance |
-| POST | `/mpesa/transaction-status` | Query transaction status |
+| POST | `/daraja/stk-push` | Initiate STK Push |
+| POST | `/daraja/c2b/register` | Register C2B URLs |
+| POST | `/daraja/c2b/simulate` | Simulate C2B payment |
+| POST | `/daraja/b2c` | Business to Customer payment |
+| POST | `/daraja/b2b` | Business to Business payment |
+| POST | `/daraja/reversal` | Reverse a transaction |
+| POST | `/daraja/account-balance` | Query account balance |
+| POST | /daraja/transaction-status | Query transaction status |
+| POST | /daraja/qr-code | Generate Dynamic QR code |
 
 ### Callback Routes
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/mpesa/callbacks/stk` | STK Push callback |
-| POST | `/mpesa/callbacks/timeout` | Generic timeout |
-| POST | `/mpesa/callbacks/c2b/confirmation` | C2B confirmation |
-| POST | `/mpesa/callbacks/c2b/validation` | C2B validation |
-| POST | `/mpesa/callbacks/b2c/result` | B2C result |
-| POST | `/mpesa/callbacks/b2c/timeout` | B2C timeout |
-| POST | `/mpesa/callbacks/b2b/result` | B2B result |
-| POST | `/mpesa/callbacks/reversal/result` | Reversal result |
-| POST | `/mpesa/callbacks/account-balance/result` | Account balance result |
-| POST | `/mpesa/callbacks/transaction-status/result` | Transaction status result |
+| POST | `/daraja/callbacks/stk` | STK Push callback |
+| POST | `/daraja/callbacks/timeout` | Generic timeout |
+| POST | `/daraja/callbacks/c2b/confirmation` | C2B confirmation |
+| POST | `/daraja/callbacks/c2b/validation` | C2B validation |
+| POST | `/daraja/callbacks/b2c/result` | B2C result |
+| POST | `/daraja/callbacks/b2c/timeout` | B2C timeout |
+| POST | `/daraja/callbacks/b2b/result` | B2B result |
+| POST | `/daraja/callbacks/reversal/result` | Reversal result |
+| POST | `/daraja/callbacks/account-balance/result` | Account balance result |
+| POST | `/daraja/callbacks/transaction-status/result` | Transaction status result |
 
 You can load only the route groups you need:
 
@@ -182,7 +187,9 @@ Key configuration areas:
 | OAuth Cache | `MPESA_OAUTH_CACHE_TTL` (default: 3500s) |
 | Routes | `MPESA_ROUTE_PREFIX`, `MPESA_LOAD_ROUTES`, `MPESA_LOAD_INITIATION_ROUTES`, `MPESA_LOAD_CALLBACK_ROUTES` |
 | Security | `MPESA_INITIATION_TOKEN`, `MPESA_CALLBACK_SECRET`, `MPESA_TRUSTED_CALLBACK_IPS` |
-| Queue | `MPESA_CALLBACK_JOB_CONNECTION`, `MPESA_CALLBACK_JOB_QUEUE` |
+| Queue | MPESA_CALLBACK_JOB_CONNECTION, MPESA_CALLBACK_JOB_QUEUE |
+| B2C | MPESA_B2C_PAYMENT_URI |
+| Logging | `MPESA_LOG_CHANNEL`, `MPESA_LOG_CHANNEL_STK`, `MPESA_LOG_CHANNEL_C2B`, `MPESA_LOG_CHANNEL_B2C`, `MPESA_LOG_CHANNEL_B2B`, `MPESA_LOG_CHANNEL_REVERSAL`, `MPESA_LOG_CHANNEL_ACCOUNT_BALANCE`, `MPESA_LOG_CHANNEL_TRANSACTION_STATUS`, `MPESA_LOG_CHANNEL_QR` |
 | Rate Limit | `MPESA_INITIATION_RATE_LIMIT_MAX_ATTEMPTS`, `MPESA_INITIATION_RATE_LIMIT_DECAY_SECONDS` |
 
 ## Database
@@ -266,6 +273,24 @@ MPESA_CALLBACK_JOB_CONNECTION=redis
 MPESA_CALLBACK_JOB_QUEUE=mpesa-callbacks
 ```
 
+### Journey-Specific Logging
+
+By default, all package logs use `MPESA_LOG_CHANNEL`. To split busy traffic by flow, point specific journeys at different Laravel log channels:
+
+```env
+MPESA_LOG_CHANNEL=mpesa
+MPESA_LOG_CHANNEL_STK=mpesa-stk
+MPESA_LOG_CHANNEL_C2B=mpesa-c2b
+MPESA_LOG_CHANNEL_B2C=mpesa-b2c
+MPESA_LOG_CHANNEL_B2B=mpesa-b2b
+MPESA_LOG_CHANNEL_REVERSAL=mpesa-reversal
+MPESA_LOG_CHANNEL_ACCOUNT_BALANCE=mpesa-balance
+MPESA_LOG_CHANNEL_TRANSACTION_STATUS=mpesa-status
+MPESA_LOG_CHANNEL_QR=mpesa-qr
+```
+
+`MPESA_LOG_CHANNEL_OAUTH`, `MPESA_LOG_CHANNEL_CALLBACK`, `MPESA_LOG_CHANNEL_FORWARDING`, and `MPESA_LOG_CHANNEL_SECURITY` are also available when you want to isolate cross-cutting concerns.
+
 ## Events
 
 The package dispatches events for every callback type:
@@ -338,8 +363,8 @@ The package returns consistent JSON error responses:
 {
   "ShortCode": "600000",
   "ResponseType": "Completed",
-  "ConfirmationURL": "https://your-app.test/mpesa/callbacks/c2b/confirmation",
-  "ValidationURL": "https://your-app.test/mpesa/callbacks/c2b/validation"
+  "ConfirmationURL": "https://your-app.test/daraja/callbacks/c2b/confirmation",
+  "ValidationURL": "https://your-app.test/daraja/callbacks/c2b/validation"
 }
 ```
 
@@ -379,3 +404,8 @@ Contributions are welcome. Please:
 ## License
 
 This package is open-sourced software licensed under the [MIT License](LICENSE).
+
+
+
+
+

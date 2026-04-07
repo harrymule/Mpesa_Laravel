@@ -57,3 +57,4 @@ class DefaultCallbackPayloadTransformerTest extends TestCase
         $this->assertSame('Success', $payload['Message']);
     }
 }
+

@@ -5,6 +5,7 @@ namespace Harri\LaravelMpesa\Jobs;
 use Harri\LaravelMpesa\Events\CallbackForwardingFailed;
 use Harri\LaravelMpesa\Models\MpesaTransaction;
 use Harri\LaravelMpesa\Models\Payment;
+use Harri\LaravelMpesa\Support\MpesaLog;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class ForwardMpesaCallbackJob implements ShouldQueue
@@ -33,7 +35,8 @@ class ForwardMpesaCallbackJob implements ShouldQueue
         public string $callbackUrl,
         public array $payload,
         public ?int $paymentId = null,
-        public ?int $transactionId = null
+        public ?int $transactionId = null,
+        public ?string $journey = null,
     ) {
     }
 
@@ -70,7 +73,7 @@ class ForwardMpesaCallbackJob implements ShouldQueue
 
     protected function updateDeliveryState(bool $success, ?string $statusCode): void
     {
-        if ($this->paymentId) {
+        if ($this->paymentId && Schema::hasTable('mpesa_payments')) {
             Payment::query()->whereKey($this->paymentId)->update([
                 'callback_success' => $success,
                 'callback_attempts' => DB::raw('callback_attempts + 1'),
@@ -79,7 +82,7 @@ class ForwardMpesaCallbackJob implements ShouldQueue
             ]);
         }
 
-        if ($this->transactionId) {
+        if ($this->transactionId && Schema::hasTable('mpesa_transactions')) {
             MpesaTransaction::query()->whereKey($this->transactionId)->update([
                 'callback_success' => $success,
                 'callback_attempts' => DB::raw('callback_attempts + 1'),
@@ -99,7 +102,7 @@ class ForwardMpesaCallbackJob implements ShouldQueue
             'message' => $message,
         ];
 
-        Log::channel((string) config('mpesa.log_channel', 'stack'))->error('mpesa.callback.forwarding_failed', $context);
+        Log::channel(MpesaLog::channel($this->journey ?? 'forwarding'))->error('mpesa.callback.forwarding_failed', $context);
 
         Event::dispatch(new CallbackForwardingFailed(
             callbackUrl: $this->callbackUrl,
@@ -113,7 +116,7 @@ class ForwardMpesaCallbackJob implements ShouldQueue
 
     protected function logInfo(string $message, array $context = []): void
     {
-        Log::channel((string) config('mpesa.log_channel', 'stack'))->info($message, array_merge([
+        Log::channel(MpesaLog::channel($this->journey ?? 'forwarding'))->info($message, array_merge([
             'callback_url' => $this->callbackUrl,
             'payment_id' => $this->paymentId,
             'transaction_id' => $this->transactionId,

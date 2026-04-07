@@ -2,6 +2,7 @@
 
 namespace Harri\LaravelMpesa\Tests\Feature;
 
+use Harri\LaravelMpesa\Models\MpesaErrorCode;
 use Harri\LaravelMpesa\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -18,7 +19,7 @@ class PackageHardeningTest extends TestCase
 
         $this->refreshApplication();
 
-        $response = $this->postJson('/mpesa/stk-push', [
+        $response = $this->postJson('/daraja/stk-push', [
             'amount' => 100,
             'phone' => '0712345678',
             'reference' => 'INV-1001',
@@ -38,9 +39,9 @@ class PackageHardeningTest extends TestCase
 
         $server = ['REMOTE_ADDR' => '10.10.10.10'];
 
-        $this->withServerVariables($server)->postJson('/mpesa/stk-push', [])->assertStatus(422);
-        $this->withServerVariables($server)->postJson('/mpesa/stk-push', [])->assertStatus(422);
-        $this->withServerVariables($server)->postJson('/mpesa/stk-push', [])
+        $this->withServerVariables($server)->postJson('/daraja/stk-push', [])->assertStatus(422);
+        $this->withServerVariables($server)->postJson('/daraja/stk-push', [])->assertStatus(422);
+        $this->withServerVariables($server)->postJson('/daraja/stk-push', [])
             ->assertStatus(429)
             ->assertJsonPath('success', false)
             ->assertJsonPath('error', 'mpesa_rate_limited');
@@ -48,7 +49,7 @@ class PackageHardeningTest extends TestCase
 
     public function test_it_returns_normalized_validation_errors(): void
     {
-        $response = $this->postJson('/mpesa/b2c', []);
+        $response = $this->postJson('/daraja/b2c', []);
 
         $response->assertStatus(422)
             ->assertJsonPath('success', false)
@@ -68,12 +69,12 @@ class PackageHardeningTest extends TestCase
                 'access_token' => 'test-token',
                 'expires_in' => '3600',
             ]),
-            'https://sandbox.safaricom.co.ke/mpesa/b2c/v1/paymentrequest' => Http::response([
+            'https://sandbox.safaricom.co.ke/mpesa/b2c/v3/paymentrequest' => Http::response([
                 'errorMessage' => 'Invalid initiator information',
             ], 400),
         ]);
 
-        $response = $this->postJson('/mpesa/b2c', [
+        $response = $this->postJson('/daraja/b2c', [
             'Amount' => 150,
             'PartyB' => '0712345678',
             'Remarks' => 'Withdrawal',
@@ -81,7 +82,131 @@ class PackageHardeningTest extends TestCase
 
         $response->assertStatus(400)
             ->assertJsonPath('success', false)
-            ->assertJsonPath('error', 'mpesa_request_failed');
+            ->assertJsonPath('error', 'mpesa_request_failed')
+            ->assertJsonPath('details.journey', 'b2c')
+            ->assertJsonPath('details.error_stage', 'request');
+    }
+
+    public function test_it_records_known_mpesa_errors_in_the_catalog_with_journey(): void
+    {
+        Http::fake([
+            'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials' => Http::response([
+                'access_token' => 'test-token',
+                'expires_in' => '3600',
+            ]),
+            'https://sandbox.safaricom.co.ke/mpesa/c2b/v2/registerurl' => Http::response([
+                'errorCode' => '500.003.1001',
+                'errorMessage' => 'Urls are already registered.',
+            ], 500),
+        ]);
+
+        $response = $this->postJson('/daraja/c2b/register', [
+            'ShortCode' => '600000',
+            'ResponseType' => 'Completed',
+            'ConfirmationURL' => 'https://client-app.test/daraja/callbacks/c2b/confirmation',
+            'ValidationURL' => 'https://client-app.test/daraja/callbacks/c2b/validation',
+        ]);
+
+        $response->assertStatus(500)
+            ->assertJsonPath('error', 'mpesa_c2b_urls_already_registered')
+            ->assertJsonPath('details.mpesa_error_code', '500.003.1001')
+            ->assertJsonPath('details.known_error', true)
+            ->assertJsonPath('details.journey', 'c2b')
+            ->assertJsonPath('details.error_stage', 'request');
+
+        $this->assertDatabaseHas('mpesa_error_codes', [
+            'code' => '500.003.1001',
+            'journey' => 'c2b',
+            'error_stage' => 'request',
+            'error_key' => 'mpesa_c2b_urls_already_registered',
+            'is_known' => 1,
+        ]);
+    }
+
+    public function test_it_records_unknown_mpesa_errors_in_the_catalog_with_journey(): void
+    {
+        Http::fake([
+            'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials' => Http::response([
+                'access_token' => 'test-token',
+                'expires_in' => '3600',
+            ]),
+            'https://sandbox.safaricom.co.ke/mpesa/c2b/v2/registerurl' => Http::response([
+                'errorCode' => '999.999.99',
+                'errorMessage' => 'Brand new Daraja failure',
+            ], 500),
+        ]);
+
+        $response = $this->postJson('/daraja/c2b/register', [
+            'ShortCode' => '600000',
+            'ResponseType' => 'Completed',
+            'ConfirmationURL' => 'https://client-app.test/daraja/callbacks/c2b/confirmation',
+            'ValidationURL' => 'https://client-app.test/daraja/callbacks/c2b/validation',
+        ]);
+
+        $response->assertStatus(500)
+            ->assertJsonPath('error', 'mpesa_request_failed')
+            ->assertJsonPath('details.mpesa_error_code', '999.999.99')
+            ->assertJsonPath('details.known_error', false)
+            ->assertJsonPath('details.journey', 'c2b')
+            ->assertJsonPath('details.error_stage', 'request');
+
+        $record = MpesaErrorCode::query()
+            ->where('code', '999.999.99')
+            ->where('journey', 'c2b')
+            ->where('error_stage', 'request')
+            ->first();
+
+        $this->assertNotNull($record);
+        $this->assertSame('Brand new Daraja failure', $record->message);
+        $this->assertSame('c2b', $record->journey);
+        $this->assertSame('request', $record->error_stage);
+        $this->assertFalse($record->is_known);
+        $this->assertSame(1, $record->occurrences);
+    }
+
+    public function test_the_same_error_code_can_be_tracked_separately_per_journey(): void
+    {
+        Http::fake([
+            'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials' => Http::response([
+                'access_token' => 'test-token',
+                'expires_in' => '3600',
+            ]),
+            'https://sandbox.safaricom.co.ke/mpesa/c2b/v2/registerurl' => Http::response([
+                'errorCode' => '500.003.1001',
+                'errorMessage' => 'Urls are already registered.',
+            ], 500),
+            'https://sandbox.safaricom.co.ke/mpesa/b2c/v3/paymentrequest' => Http::response([
+                'errorCode' => '500.003.1001',
+                'errorMessage' => 'Internal Server Error',
+            ], 500),
+        ]);
+
+        $this->postJson('/daraja/c2b/register', [
+            'ShortCode' => '600000',
+            'ResponseType' => 'Completed',
+            'ConfirmationURL' => 'https://client-app.test/daraja/callbacks/c2b/confirmation',
+            'ValidationURL' => 'https://client-app.test/daraja/callbacks/c2b/validation',
+        ])->assertStatus(500);
+
+        $this->postJson('/daraja/b2c', [
+            'Amount' => 150,
+            'PartyB' => '0712345678',
+            'Remarks' => 'Withdrawal',
+        ])->assertStatus(500);
+
+        $this->assertDatabaseHas('mpesa_error_codes', [
+            'code' => '500.003.1001',
+            'journey' => 'c2b',
+            'error_stage' => 'request',
+            'error_key' => 'mpesa_c2b_urls_already_registered',
+        ]);
+
+        $this->assertDatabaseHas('mpesa_error_codes', [
+            'code' => '500.003.1001',
+            'journey' => 'b2c',
+            'error_stage' => 'request',
+            'error_key' => 'mpesa_internal_server_error',
+        ]);
     }
 
     public function test_callback_hmac_signature_can_be_required(): void
@@ -93,7 +218,7 @@ class PackageHardeningTest extends TestCase
 
         $payload = ['TransID' => 'TEST123', 'MSISDN' => '254712345678'];
 
-        $this->postJson('/mpesa/callbacks/c2b/validation', $payload)
+        $this->postJson('/daraja/callbacks/c2b/validation', $payload)
             ->assertStatus(403)
             ->assertJsonPath('error', 'mpesa_callback_signature_missing');
     }
@@ -117,7 +242,7 @@ class PackageHardeningTest extends TestCase
 
         $this->call(
             'POST',
-            '/mpesa/callbacks/c2b/validation',
+            '/daraja/callbacks/c2b/validation',
             [],
             [],
             [],
@@ -131,3 +256,4 @@ class PackageHardeningTest extends TestCase
             ->assertJsonPath('ResultCode', 0);
     }
 }
+

@@ -4,6 +4,7 @@ namespace Harri\LaravelMpesa;
 
 use Harri\LaravelMpesa\Exceptions\MpesaRequestException;
 use Harri\LaravelMpesa\Support\Mpesa as MpesaSupport;
+use Harri\LaravelMpesa\Support\MpesaLog;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\RequestException;
@@ -31,7 +32,7 @@ class MpesaClient
             'connection' => $connection,
             'cache_key' => $cacheKey,
             'ttl' => $ttl,
-        ]);
+        ], 'oauth');
 
         return Cache::remember($cacheKey, now()->addSeconds($ttl), function () use ($connection, $credentials) {
             $response = Http::withBasicAuth(
@@ -44,7 +45,7 @@ class MpesaClient
             $this->logInfo('mpesa.oauth.fetched', [
                 'connection' => $connection,
                 'expires_in' => Arr::get($data, 'expires_in'),
-            ]);
+            ], 'oauth');
 
             return $data;
         });
@@ -57,7 +58,7 @@ class MpesaClient
 
         $this->logInfo('mpesa.oauth.cache_cleared', [
             'connection' => $connection,
-        ]);
+        ], 'oauth');
     }
 
     public function stkPush(array $payload, ?string $connection = null): array
@@ -81,7 +82,7 @@ class MpesaClient
 
         unset($payload['Passkey']);
 
-        return $this->post('/mpesa/stkpush/v1/processrequest', $payload, $connection);
+        return $this->post('/mpesa/stkpush/v1/processrequest', $payload, $connection, 'stk');
     }
 
     public function stkPushQuery(string $checkoutRequestId, ?string $connection = null, ?string $shortCode = null, ?string $passkey = null): array
@@ -95,7 +96,7 @@ class MpesaClient
             'Password' => MpesaSupport::stkPassword($shortCode, $passkey, $timestamp),
             'Timestamp' => $timestamp,
             'CheckoutRequestID' => $checkoutRequestId,
-        ], $connection);
+        ], $connection, 'stk');
     }
 
     public function registerUrls(array $payload, ?string $connection = null): array
@@ -105,7 +106,7 @@ class MpesaClient
             'ResponseType' => Arr::get($payload, 'ResponseType', 'Completed'),
             'ConfirmationURL' => Arr::get($payload, 'ConfirmationURL', $this->config['confirmation_url']),
             'ValidationURL' => Arr::get($payload, 'ValidationURL', $this->config['validation_url']),
-        ], $payload), $connection);
+        ], $payload), $connection, 'c2b');
     }
 
     public function simulateC2b(array $payload, ?string $connection = null): array
@@ -115,12 +116,12 @@ class MpesaClient
             'CommandID' => Arr::get($payload, 'CommandID', 'CustomerPayBillOnline'),
             'Msisdn' => MpesaSupport::formatPhone((string) Arr::get($payload, 'Msisdn')),
             'BillRefNumber' => Arr::get($payload, 'BillRefNumber', 'Test'),
-        ], $payload), $connection);
+        ], $payload), $connection, 'c2b');
     }
 
     public function b2c(array $payload, ?string $connection = null): array
     {
-        return $this->securePost('/mpesa/b2c/v1/paymentrequest', array_merge([
+        return $this->securePost((string) Arr::get($this->config, 'b2c.payment_uri', '/mpesa/b2c/v3/paymentrequest'), array_merge([
             'InitiatorName' => Arr::get($payload, 'InitiatorName', $this->config['initiator_name']),
             'CommandID' => Arr::get($payload, 'CommandID', 'BusinessPayment'),
             'PartyA' => Arr::get($payload, 'PartyA', $this->config['shortcode']),
@@ -129,7 +130,7 @@ class MpesaClient
             'QueueTimeOutURL' => Arr::get($payload, 'QueueTimeOutURL', $this->config['timeout_url']),
             'ResultURL' => Arr::get($payload, 'ResultURL', $this->config['result_url']),
             'Occasion' => Arr::get($payload, 'Occasion', 'B2C Payment'),
-        ], $payload), $connection);
+        ], $payload), $connection, 'b2c');
     }
 
     public function transactionStatus(array $payload, ?string $connection = null): array
@@ -143,7 +144,7 @@ class MpesaClient
             'ResultURL' => Arr::get($payload, 'ResultURL', $this->config['result_url']),
             'Remarks' => Arr::get($payload, 'Remarks', 'Transaction status'),
             'Occasion' => Arr::get($payload, 'Occasion', 'Transaction status'),
-        ], $payload), $connection);
+        ], $payload), $connection, 'transaction_status');
     }
 
     public function accountBalance(array $payload = [], ?string $connection = null): array
@@ -156,7 +157,7 @@ class MpesaClient
             'Remarks' => Arr::get($payload, 'Remarks', 'Account balance'),
             'QueueTimeOutURL' => Arr::get($payload, 'QueueTimeOutURL', $this->config['timeout_url']),
             'ResultURL' => Arr::get($payload, 'ResultURL', $this->config['result_url']),
-        ], $payload), $connection);
+        ], $payload), $connection, 'account_balance');
     }
 
     public function reversal(array $payload, ?string $connection = null): array
@@ -170,7 +171,7 @@ class MpesaClient
             'ResultURL' => Arr::get($payload, 'ResultURL', $this->config['result_url']),
             'Remarks' => Arr::get($payload, 'Remarks', 'Transaction reversal'),
             'Occasion' => Arr::get($payload, 'Occasion', 'Transaction reversal'),
-        ], $payload), $connection);
+        ], $payload), $connection, 'reversal');
     }
 
     public function b2b(array $payload, ?string $connection = null): array
@@ -185,7 +186,19 @@ class MpesaClient
             'Remarks' => Arr::get($payload, 'Remarks', 'B2B Payment'),
             'QueueTimeOutURL' => Arr::get($payload, 'QueueTimeOutURL', $this->config['timeout_url']),
             'ResultURL' => Arr::get($payload, 'ResultURL', $this->config['result_url']),
-        ], $payload), $connection);
+        ], $payload), $connection, 'b2b');
+    }
+
+    public function qrCode(array $payload, ?string $connection = null): array
+    {
+        return $this->post((string) Arr::get($this->config, 'qr.generate_uri', '/mpesa/qrcode/v1/generate'), array_merge([
+            'MerchantName' => Arr::get($payload, 'MerchantName'),
+            'RefNo' => Arr::get($payload, 'RefNo'),
+            'Amount' => Arr::get($payload, 'Amount'),
+            'TrxCode' => Arr::get($payload, 'TrxCode', 'BG'),
+            'CPI' => Arr::get($payload, 'CPI', $this->config['shortcode']),
+            'Size' => (string) Arr::get($payload, 'Size', Arr::get($this->config, 'qr.default_size', '300')),
+        ], $payload), $connection, 'qr');
     }
 
     public function batch(array $operations, ?string $connection = null): array
@@ -193,6 +206,8 @@ class MpesaClient
         $connection = $this->connectionName($connection);
         $accessToken = Arr::get($this->accessToken($connection), 'access_token');
         $preparedOperations = array_map(fn (array $operation): array => $this->prepareBatchOperation($operation, $connection), $operations);
+        $journeys = array_values(array_unique(array_map(fn (array $operation): string => MpesaLog::journeyFromUri($operation['uri']), $preparedOperations)));
+        $batchJourney = count($journeys) === 1 ? $journeys[0] : 'default';
 
         $this->logInfo('mpesa.api.batch_request', [
             'connection' => $connection,
@@ -202,7 +217,7 @@ class MpesaClient
                 'uri' => $operation['uri'],
                 'payload' => $this->sanitizePayload($operation['payload']),
             ], $preparedOperations),
-        ]);
+        ], $batchJourney);
 
         $responses = Http::pool(function (Pool $pool) use ($preparedOperations, $connection, $accessToken) {
             $requests = [];
@@ -226,28 +241,33 @@ class MpesaClient
         foreach ($preparedOperations as $operation) {
             $key = $operation['key'];
             $response = $responses[$key] ?? null;
+            $journey = MpesaLog::journeyFromUri($operation['uri']);
 
             if (! $response instanceof Response) {
-                throw new MpesaRequestException('M-Pesa batch request returned an invalid response.');
+                throw new MpesaRequestException('M-Pesa batch request returned an invalid response.', 500, null, [], $journey);
             }
 
             try {
                 $results[$key] = $this->handleResponse($response->throw(), 'M-Pesa batch request failed.');
             } catch (RequestException $exception) {
                 $this->clearAccessTokenCache($connection);
+                $details = $exception->response?->json();
+                $details = is_array($details) ? $details : ['raw_body' => $exception->response?->body()];
 
                 $this->logError('mpesa.api.batch_failed', [
                     'connection' => $connection,
                     'key' => $key,
                     'uri' => $operation['uri'],
                     'status' => $exception->response?->status(),
-                    'response' => $exception->response?->json() ?? $exception->response?->body(),
-                ]);
+                    'response' => $details,
+                ], $journey);
 
                 throw new MpesaRequestException(
                     $exception->response?->body() ?: 'M-Pesa batch request failed.',
                     $exception->response?->status() ?? 500,
-                    $exception
+                    $exception,
+                    $details,
+                    $journey,
                 );
             }
         }
@@ -255,7 +275,7 @@ class MpesaClient
         $this->logInfo('mpesa.api.batch_response', [
             'connection' => $connection,
             'results' => $results,
-        ]);
+        ], $batchJourney);
 
         return $results;
     }
@@ -288,32 +308,37 @@ class MpesaClient
         return base64_encode($encrypted ?: '');
     }
 
-    protected function post(string $uri, array $payload, ?string $connection = null): array
+    protected function post(string $uri, array $payload, ?string $connection = null, ?string $journey = null): array
     {
         $connection = $this->connectionName($connection);
+        $journey ??= MpesaLog::journeyFromUri($uri);
 
         $this->logInfo('mpesa.api.request', [
             'connection' => $connection,
             'uri' => $uri,
             'payload' => $this->sanitizePayload($payload),
-        ]);
+        ], $journey);
 
         try {
             $response = $this->request($connection)->post($uri, $payload)->throw();
         } catch (RequestException $exception) {
             $this->clearAccessTokenCache($connection);
+            $details = $exception->response?->json();
+            $details = is_array($details) ? $details : ['raw_body' => $exception->response?->body()];
 
             $this->logError('mpesa.api.failed', [
                 'connection' => $connection,
                 'uri' => $uri,
                 'status' => $exception->response?->status(),
-                'response' => $exception->response?->json() ?? $exception->response?->body(),
-            ]);
+                'response' => $details,
+            ], $journey);
 
             throw new MpesaRequestException(
                 $exception->response?->body() ?: 'M-Pesa request failed.',
                 $exception->response?->status() ?? 500,
-                $exception
+                $exception,
+                $details,
+                $journey,
             );
         }
 
@@ -324,12 +349,12 @@ class MpesaClient
             'uri' => $uri,
             'status' => $response->status(),
             'response' => $data,
-        ]);
+        ], $journey);
 
         return $data;
     }
 
-    protected function securePost(string $uri, array $payload, ?string $connection = null): array
+    protected function securePost(string $uri, array $payload, ?string $connection = null, ?string $journey = null): array
     {
         $connection = $this->connectionName($connection);
 
@@ -337,7 +362,7 @@ class MpesaClient
             'SecurityCredential' => $this->generateSecurityCredential($connection),
         ], $payload);
 
-        return $this->post($uri, $payload, $connection);
+        return $this->post($uri, $payload, $connection, $journey);
     }
 
     protected function request(?string $connection = null): PendingRequest
@@ -422,13 +447,16 @@ class MpesaClient
         })->all();
     }
 
-    protected function logInfo(string $message, array $context = []): void
+    protected function logInfo(string $message, array $context = [], ?string $journey = null): void
     {
-        Log::channel((string) Arr::get($this->config, 'log_channel', 'stack'))->info($message, $context);
+        Log::channel(MpesaLog::channel($journey))->info($message, $context);
     }
 
-    protected function logError(string $message, array $context = []): void
+    protected function logError(string $message, array $context = [], ?string $journey = null): void
     {
-        Log::channel((string) Arr::get($this->config, 'log_channel', 'stack'))->error($message, $context);
+        Log::channel(MpesaLog::channel($journey))->error($message, $context);
     }
 }
+
+
+

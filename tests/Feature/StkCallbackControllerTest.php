@@ -8,6 +8,7 @@ use Harri\LaravelMpesa\Models\StkPush;
 use Harri\LaravelMpesa\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Log;
 
 class StkCallbackControllerTest extends TestCase
 {
@@ -30,7 +31,7 @@ class StkCallbackControllerTest extends TestCase
 
         $payload = $this->successfulStkPayload();
 
-        $response = $this->postJson('/mpesa/callbacks/stk', $payload);
+        $response = $this->postJson('/daraja/callbacks/stk', $payload);
 
         $response->assertOk()->assertJsonPath('ResultCode', 0);
 
@@ -50,6 +51,56 @@ class StkCallbackControllerTest extends TestCase
         $this->assertInstanceOf(Payment::class, Payment::query()->first());
     }
 
+    public function test_it_catalogs_known_failed_stk_callback_results(): void
+    {
+        Bus::fake();
+
+        StkPush::query()->create([
+            'tracking_id' => 'track-124',
+            'phone_number' => '254712345678',
+            'amount' => '100',
+            'invoice_number' => 'INV-1002',
+            'merchant_request_id' => 'f1e2-4b95-a71d-b30d3cdbb7a7942864',
+            'checkout_request_id' => 'ws_CO_21072024125243250722943992',
+            'callback_url' => 'https://client-app.test/api/payment-callback',
+            'status' => 0,
+        ]);
+
+        $response = $this->postJson('/daraja/callbacks/stk', [
+            'Body' => [
+                'stkCallback' => [
+                    'MerchantRequestID' => 'f1e2-4b95-a71d-b30d3cdbb7a7942864',
+                    'CheckoutRequestID' => 'ws_CO_21072024125243250722943992',
+                    'ResultCode' => 1032,
+                    'ResultDesc' => 'Request cancelled by user',
+                ],
+            ],
+        ]);
+
+        $response->assertOk()->assertJsonPath('ResultCode', 0);
+
+        $this->assertDatabaseHas('mpesa_error_codes', [
+            'journey' => 'stk',
+            'error_stage' => 'callback_result',
+            'code' => '1032',
+            'error_key' => 'mpesa_stk_request_cancelled_by_user',
+            'is_known' => 1,
+        ]);
+    }
+
+    public function test_it_routes_stk_callback_logs_to_the_stk_channel_when_configured(): void
+    {
+        config()->set('mpesa.log_channel', 'mpesa-default');
+        config()->set('mpesa.log_channels.stk', 'mpesa-stk');
+
+        Log::shouldReceive('channel')->once()->with('mpesa-stk')->andReturnSelf();
+        Log::shouldReceive('info')->once()->with('mpesa.stk.callback', $this->successfulStkPayload());
+
+        $this->postJson('/daraja/callbacks/stk', $this->successfulStkPayload())
+            ->assertOk()
+            ->assertJsonPath('ResultCode', 0);
+    }
+
     public function test_it_does_not_duplicate_payment_processing_for_repeat_stk_callbacks(): void
     {
         Bus::fake();
@@ -67,8 +118,8 @@ class StkCallbackControllerTest extends TestCase
 
         $payload = $this->successfulStkPayload();
 
-        $this->postJson('/mpesa/callbacks/stk', $payload)->assertOk();
-        $this->postJson('/mpesa/callbacks/stk', $payload)->assertOk();
+        $this->postJson('/daraja/callbacks/stk', $payload)->assertOk();
+        $this->postJson('/daraja/callbacks/stk', $payload)->assertOk();
 
         $this->assertSame(1, Payment::query()->count());
         Bus::assertDispatchedTimes(ForwardMpesaCallbackJob::class, 1);
@@ -92,7 +143,7 @@ class StkCallbackControllerTest extends TestCase
             'status' => 0,
         ]);
 
-        $this->postJson('/mpesa/callbacks/stk', $this->successfulStkPayload())->assertOk();
+        $this->postJson('/daraja/callbacks/stk', $this->successfulStkPayload())->assertOk();
 
         Bus::assertDispatched(ForwardMpesaCallbackJob::class, function (ForwardMpesaCallbackJob $job) {
             return $job->connection === 'redis-mpesa' && $job->queue === 'mpesa-callbacks';
@@ -121,3 +172,8 @@ class StkCallbackControllerTest extends TestCase
         ];
     }
 }
+
+
+
+
+

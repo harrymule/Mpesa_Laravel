@@ -4,6 +4,7 @@ namespace Harri\LaravelMpesa\Tests\Feature;
 
 use Harri\LaravelMpesa\Contracts\C2bValidationResponder;
 use Harri\LaravelMpesa\Jobs\ForwardMpesaCallbackJob;
+use Harri\LaravelMpesa\Models\MpesaErrorCode;
 use Harri\LaravelMpesa\Models\MpesaTransaction;
 use Harri\LaravelMpesa\Models\Payment;
 use Harri\LaravelMpesa\Services\TransactionService;
@@ -25,7 +26,7 @@ class MpesaTransactionCoverageTest extends TestCase
             'ResponseDescription' => 'Success',
         ]);
 
-        $response = $this->postJson('/mpesa/c2b/register', [
+        $response = $this->postJson('/daraja/c2b/register', [
             'ShortCode' => '600000',
             'ResponseType' => 'Completed',
             'ConfirmationURL' => 'https://client-app.test/c2b/confirmation',
@@ -52,7 +53,7 @@ class MpesaTransactionCoverageTest extends TestCase
             'ResponseDescription' => 'Accept the service request successfully.',
         ]);
 
-        $response = $this->postJson('/mpesa/c2b/simulate', [
+        $response = $this->postJson('/daraja/c2b/simulate', [
             'Amount' => 250,
             'Msisdn' => '0712345678',
             'BillRefNumber' => 'INV-2500',
@@ -102,24 +103,24 @@ class MpesaTransactionCoverageTest extends TestCase
             ]),
         ]);
 
-        $this->postJson('/mpesa/b2b', [
+        $this->postJson('/daraja/b2b', [
             'Amount' => 300,
             'PartyB' => '600111',
             'AccountReference' => 'B2B-REF',
             'callback_url' => 'https://client-app.test/b2b-callback',
         ])->assertOk();
 
-        $this->postJson('/mpesa/reversal', [
+        $this->postJson('/daraja/reversal', [
             'TransactionID' => 'NLJ7RT61SV',
             'Amount' => 300,
             'callback_url' => 'https://client-app.test/reversal-callback',
         ])->assertOk();
 
-        $this->postJson('/mpesa/account-balance', [
+        $this->postJson('/daraja/account-balance', [
             'callback_url' => 'https://client-app.test/balance-callback',
         ])->assertOk();
 
-        $this->postJson('/mpesa/transaction-status', [
+        $this->postJson('/daraja/transaction-status', [
             'TransactionID' => 'NLJ7RT61SV',
             'callback_url' => 'https://client-app.test/status-callback',
         ])->assertOk();
@@ -160,7 +161,7 @@ class MpesaTransactionCoverageTest extends TestCase
                 'access_token' => 'batch-token',
                 'expires_in' => '3600',
             ]),
-            'https://sandbox.safaricom.co.ke/mpesa/b2c/v1/paymentrequest' => Http::response([
+            'https://sandbox.safaricom.co.ke/mpesa/b2c/v3/paymentrequest' => Http::response([
                 'ConversationID' => 'AG_B2C_BATCH_1',
                 'OriginatorConversationID' => 'ORIG_B2C_BATCH_1',
                 'ResponseCode' => '0',
@@ -236,11 +237,11 @@ class MpesaTransactionCoverageTest extends TestCase
             'MSISDN' => '254700000001',
         ];
 
-        $this->postJson('/mpesa/callbacks/c2b/confirmation', $confirmation)
+        $this->postJson('/daraja/callbacks/c2b/confirmation', $confirmation)
             ->assertOk()
             ->assertJsonPath('ResultCode', 0);
 
-        $this->postJson('/mpesa/callbacks/c2b/validation', $validation)
+        $this->postJson('/daraja/callbacks/c2b/validation', $validation)
             ->assertOk()
             ->assertJsonPath('ResultCode', 0);
 
@@ -277,8 +278,8 @@ class MpesaTransactionCoverageTest extends TestCase
             'MSISDN' => '254712345678',
         ];
 
-        $this->postJson('/mpesa/callbacks/c2b/confirmation', $payload)->assertOk();
-        $this->postJson('/mpesa/callbacks/c2b/confirmation', $payload)->assertOk();
+        $this->postJson('/daraja/callbacks/c2b/confirmation', $payload)->assertOk();
+        $this->postJson('/daraja/callbacks/c2b/confirmation', $payload)->assertOk();
 
         $this->assertSame(1, Payment::query()->where('trans_id', 'QAB123XYZ')->count());
         $this->assertSame(1, MpesaTransaction::query()->where('type', 'c2b_confirmation')->where('transaction_id', 'QAB123XYZ')->count());
@@ -298,7 +299,7 @@ class MpesaTransactionCoverageTest extends TestCase
 
         config()->set('mpesa.c2b.validation_responder', C2bValidationResponder::class);
 
-        $response = $this->postJson('/mpesa/callbacks/c2b/validation', [
+        $response = $this->postJson('/daraja/callbacks/c2b/validation', [
             'TransID' => 'QAB125XYZ',
             'TransAmount' => 50,
             'BillRefNumber' => 'INV-BLOCKED',
@@ -336,7 +337,7 @@ class MpesaTransactionCoverageTest extends TestCase
             'callback_url' => 'https://client-app.test/reversal-callback',
         ]);
 
-        $this->postJson('/mpesa/callbacks/b2b/result', [
+        $this->postJson('/daraja/callbacks/b2b/result', [
             'Result' => [
                 'ConversationID' => 'AG_B2B_2',
                 'OriginatorConversationID' => 'ORIG_B2B_2',
@@ -346,7 +347,7 @@ class MpesaTransactionCoverageTest extends TestCase
             ],
         ])->assertOk()->assertJsonPath('ResultCode', 0);
 
-        $this->postJson('/mpesa/callbacks/timeout', [
+        $this->postJson('/daraja/callbacks/timeout', [
             'ConversationID' => 'AG_REV_2',
             'OriginatorConversationID' => 'ORIG_REV_2',
         ])->assertOk()->assertJsonPath('ResultCode', 0);
@@ -366,7 +367,52 @@ class MpesaTransactionCoverageTest extends TestCase
             'result_desc' => 'Timed out',
         ]);
 
+        $this->assertDatabaseHas('mpesa_error_codes', [
+            'journey' => 'reversal',
+            'error_stage' => 'timeout',
+            'code' => '1037',
+        ]);
+
         Bus::assertDispatched(ForwardMpesaCallbackJob::class);
+    }
+
+    public function test_it_catalogs_b2c_callback_result_failures_by_stage(): void
+    {
+        Bus::fake();
+
+        MpesaTransaction::query()->create([
+            'type' => 'b2c',
+            'status' => 'requested',
+            'conversation_id' => 'AG_B2C_2',
+            'originator_conversation_id' => 'ORIG_B2C_2',
+            'callback_url' => 'https://client-app.test/b2c-callback',
+        ]);
+
+        $this->postJson('/daraja/callbacks/b2c/result', [
+            'Result' => [
+                'ConversationID' => 'AG_B2C_2',
+                'OriginatorConversationID' => 'ORIG_B2C_2',
+                'TransactionID' => 'B2CTRX001',
+                'ResultCode' => 2001,
+                'ResultDesc' => 'The initiator information is invalid.',
+            ],
+        ])->assertOk()->assertJsonPath('ResultCode', 0);
+
+        $this->assertDatabaseHas('mpesa_transactions', [
+            'type' => 'b2c',
+            'conversation_id' => 'AG_B2C_2',
+            'transaction_id' => 'B2CTRX001',
+            'status' => 'failed',
+            'result_code' => '2001',
+        ]);
+
+        $this->assertDatabaseHas('mpesa_error_codes', [
+            'journey' => 'b2c',
+            'error_stage' => 'callback_result',
+            'code' => '2001',
+            'error_key' => 'mpesa_b2c_initiator_information_invalid',
+            'is_known' => 1,
+        ]);
     }
 
     protected function fakeDarajaRequest(string $url, array $response): void
@@ -380,3 +426,4 @@ class MpesaTransactionCoverageTest extends TestCase
         ]);
     }
 }
+

@@ -8,6 +8,8 @@ use Harri\LaravelMpesa\Models\MpesaTransaction;
 use Harri\LaravelMpesa\Models\Payment;
 use Harri\LaravelMpesa\Models\StkPush;
 use Harri\LaravelMpesa\Support\DefaultCallbackPayloadTransformer;
+use Harri\LaravelMpesa\Support\MpesaErrorCatalog;
+use Harri\LaravelMpesa\Support\MpesaLog;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 
@@ -38,6 +40,11 @@ class MpesaCallbackProcessor
         }
 
         if ($resultCode !== 0) {
+            MpesaErrorCatalog::record(200, [
+                'ResultCode' => (string) $resultCode,
+                'ResultDesc' => $resultDesc,
+            ], $resultDesc, 'stk', 'callback_result');
+
             $stkPush->update([
                 'response_code' => $resultCode,
                 'internal_comment' => $resultDesc,
@@ -191,6 +198,13 @@ class MpesaCallbackProcessor
         $resultCode = (int) data_get($payload, 'Result.ResultCode', 1);
         $resultDesc = (string) data_get($payload, 'Result.ResultDesc', 'Unknown result');
 
+        if ($resultCode !== 0) {
+            MpesaErrorCatalog::record(200, [
+                'ResultCode' => (string) $resultCode,
+                'ResultDesc' => $resultDesc,
+            ], $resultDesc, $type, 'callback_result');
+        }
+
         $transaction = $this->findTransaction($type, $conversationId, $originatorConversationId);
         $transactionModel = $this->transactionModel();
 
@@ -229,6 +243,11 @@ class MpesaCallbackProcessor
         $transaction = $this->findTimeoutTransaction($type, $payload);
 
         if ($transaction) {
+            MpesaErrorCatalog::record(200, [
+                'ResultCode' => '1037',
+                'ResultDesc' => 'Timed out',
+            ], 'Timed out', $type, 'timeout');
+
             $transaction->update([
                 'status' => 'timeout',
                 'callback_payload' => $payload,
@@ -253,6 +272,11 @@ class MpesaCallbackProcessor
             })->first();
 
         if ($transaction) {
+            MpesaErrorCatalog::record(200, [
+                'ResultCode' => '1037',
+                'ResultDesc' => 'Timed out',
+            ], 'Timed out', $transaction->type, 'timeout');
+
             $transaction->update([
                 'status' => 'timeout',
                 'callback_payload' => $payload,
@@ -292,7 +316,9 @@ class MpesaCallbackProcessor
         $job = new ForwardMpesaCallbackJob(
             $stkPush->callback_url,
             $this->transformer()->transformStkSuccess($stkPush, $payment, $payload),
-            $payment->id
+            $payment->id,
+            null,
+            'stk',
         );
 
         $this->dispatch($job);
@@ -306,7 +332,10 @@ class MpesaCallbackProcessor
 
         $job = new ForwardMpesaCallbackJob(
             $stkPush->callback_url,
-            $this->transformer()->transformStkFailure($stkPush, $resultCode, $resultDesc, $payload)
+            $this->transformer()->transformStkFailure($stkPush, $resultCode, $resultDesc, $payload),
+            null,
+            null,
+            'stk',
         );
 
         $this->dispatch($job);
@@ -322,7 +351,8 @@ class MpesaCallbackProcessor
             $transaction->callback_url,
             $this->transformer()->transformTransactionResult($transaction, $payload, $resultCode, $resultDesc),
             null,
-            $transaction->id
+            $transaction->id,
+            $transaction->type,
         );
 
         $this->dispatch($job);
@@ -373,6 +403,6 @@ class MpesaCallbackProcessor
 
     protected function logDuplicate(string $type, array $context): void
     {
-        Log::channel((string) config('mpesa.log_channel', 'stack'))->info("mpesa.{$type}.duplicate_callback", $context);
+        Log::channel(MpesaLog::channel($type))->info("mpesa.{$type}.duplicate_callback", $context);
     }
 }

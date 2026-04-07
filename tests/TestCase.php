@@ -38,9 +38,9 @@ abstract class TestCase extends Orchestra
         $app['config']->set('mpesa.passkey', 'test-passkey');
         $app['config']->set('mpesa.initiator_name', 'testapi');
         $app['config']->set('mpesa.initiator_password', 'secret');
-        $app['config']->set('mpesa.callback_url', 'https://example.test/mpesa/callbacks/stk');
-        $app['config']->set('mpesa.timeout_url', 'https://example.test/mpesa/callbacks/timeout');
-        $app['config']->set('mpesa.result_url', 'https://example.test/mpesa/callbacks/b2c/result');
+        $app['config']->set('mpesa.callback_url', 'https://example.test/daraja/callbacks/stk');
+        $app['config']->set('mpesa.timeout_url', 'https://example.test/daraja/callbacks/timeout');
+        $app['config']->set('mpesa.result_url', 'https://example.test/daraja/callbacks/b2c/result');
         $app['config']->set('mpesa.connections.sandbox.consumer_key', 'consumer-key');
         $app['config']->set('mpesa.connections.sandbox.consumer_secret', 'consumer-secret');
         $app['config']->set('mpesa.connections.sandbox.security_credential', 'encoded-credential');
@@ -48,3 +48,5 @@ abstract class TestCase extends Orchestra
         $app['router']->aliasMiddleware('mpesa.test.deny', DenyMiddleware::class);
     }
 }
+
+

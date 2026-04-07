@@ -3,6 +3,7 @@
 namespace Harri\LaravelMpesa\Services;
 
 use Harri\LaravelMpesa\Models\StkPush;
+use Harri\LaravelMpesa\Support\MpesaErrorCatalog;
 use Harri\LaravelMpesa\MpesaClient;
 use Harri\LaravelMpesa\Support\Mpesa as MpesaSupport;
 use Illuminate\Support\Str;
@@ -58,8 +59,48 @@ class StkPushService
         ];
     }
 
+    public function query(string $checkoutRequestId, array $meta = []): array
+    {
+        $response = $this->client->stkPushQuery($checkoutRequestId);
+        $model = $this->stkPushModel();
+        $record = $model::query()->where('checkout_request_id', $checkoutRequestId)->first();
+        $resultCode = isset($response['ResultCode']) ? (string) $response['ResultCode'] : null;
+        $resultDesc = $response['ResultDesc'] ?? null;
+
+        if ($record) {
+            $existingMeta = is_array($record->meta) ? $record->meta : [];
+            $record->update([
+                'merchant_request_id' => $response['MerchantRequestID'] ?? $record->merchant_request_id,
+                'response_code' => $resultCode ?? ($response['ResponseCode'] ?? $record->response_code),
+                'response_description' => $response['ResponseDescription'] ?? $record->response_description,
+                'internal_comment' => $resultDesc ?? $record->internal_comment,
+                'status' => $resultCode === '0' ? 1 : $record->status,
+                'meta' => array_merge($existingMeta, [
+                    'query' => array_merge($meta, [
+                        'response' => $response,
+                    ]),
+                ]),
+            ]);
+        }
+
+        if ($resultCode !== null && $resultCode !== '0') {
+            MpesaErrorCatalog::record(200, [
+                'ResultCode' => $resultCode,
+                'ResultDesc' => (string) ($resultDesc ?? 'STK query failed.'),
+            ], (string) ($resultDesc ?? 'STK query failed.'), 'stk_query', 'query_result');
+        }
+
+        return [
+            'checkout_request_id' => $checkoutRequestId,
+            'merchant_request_id' => $response['MerchantRequestID'] ?? null,
+            'response' => $response,
+            'record' => $record,
+        ];
+    }
+
     protected function stkPushModel(): string
     {
         return config('mpesa.models.stk_push', StkPush::class);
     }
 }
+

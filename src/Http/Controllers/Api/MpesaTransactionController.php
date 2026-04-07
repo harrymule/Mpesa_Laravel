@@ -147,6 +147,23 @@ class MpesaTransactionController extends Controller
         return $this->respond('Transaction status request submitted successfully.', $result);
     }
 
+    public function qrCode(Request $request, TransactionService $service): JsonResponse
+    {
+        $data = $request->validate([
+            'MerchantName' => ['required', 'string'],
+            'RefNo' => ['required', 'string'],
+            'Amount' => ['required', 'numeric', 'min:1'],
+            'TrxCode' => ['required', 'string', 'in:BG,WA,PB,SM,SB'],
+            'CPI' => ['required', 'string'],
+            'Size' => ['nullable', 'string'],
+            'meta' => ['nullable', 'array'],
+        ]);
+
+        $result = $service->qrCode($this->withoutMeta($data), $data['meta'] ?? []);
+
+        return $this->respond('QR code generated successfully.', $result);
+    }
+
     protected function respond(string $message, array $result): JsonResponse
     {
         return response()->json([
@@ -157,6 +174,9 @@ class MpesaTransactionController extends Controller
             'checkout_request_id' => $result['response']['CheckoutRequestID'] ?? null,
             'conversation_id' => $result['response']['ConversationID'] ?? null,
             'originator_conversation_id' => $result['response']['OriginatorConversationID'] ?? null,
+            'request_id' => $result['response']['RequestID'] ?? $result['response']['requestId'] ?? null,
+            'response_code' => $result['response']['ResponseCode'] ?? null,
+            'response_description' => $result['response']['ResponseDescription'] ?? null,
             'response' => $result['response'],
         ]);
     }
@@ -175,3 +195,5 @@ class MpesaTransactionController extends Controller
         return $data;
     }
 }
+
+

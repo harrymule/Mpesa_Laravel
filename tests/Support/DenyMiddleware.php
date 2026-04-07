@@ -14,3 +14,4 @@ class DenyMiddleware
         ], 401);
     }
 }
+
